@@ -10,7 +10,15 @@ python -m uvicorn app.main:app --reload
 
 Then open <http://127.0.0.1:8000>.
 
-The API is available at `/docs`. Classification in this starter is a deterministic demo scorer based on the uploaded file and optional material hint; replace `classify()` in `app/main.py` with a trained CV model when one is available. This keeps the UI, routing, review logic, analytics, and API stable while the model is developed.
+The API is available at `/docs`. The page classifies uploaded images automatically, records category/confidence/timestamp in SQLite, and returns bin and disposal suggestions. TrashNet has six model classes; organic and hazardous are not model predictions in this version. Bin colors are examples and can vary by local collection rules.
+
+To clear all classification history and restart the event IDs, stop the server and run:
+
+```powershell
+python -m app.main --reset-db
+```
+
+This deletes all saved scan events from `data/sortwise.db`; it does not delete the database file or model.
 
 ## Endpoints
 

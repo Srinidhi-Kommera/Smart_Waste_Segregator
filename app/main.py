@@ -4,6 +4,7 @@ import base64
 import hashlib
 import io
 import sqlite3
+import argparse
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,13 @@ CATEGORIES = {
     "hazardous": {"label": "Hazardous / E-waste", "route": "Hazardous-waste collection point", "tip": "Never place batteries or electronics in household bins.", "tone": "red"},
     "general": {"label": "General / Non-recyclable", "route": "General waste bin", "tip": "Use only when the item cannot be safely separated.", "tone": "charcoal"},
 }
+for _category, _route, _color, _recyclable in [
+    ("plastic", "Blue bin", "blue", True), ("paper", "Blue bin", "blue", True),
+    ("metal", "Blue bin", "blue", True), ("glass", "Green bin", "green", True),
+    ("organic", "Green bin", "green", True), ("hazardous", "Red bin / approved collection point", "red", False),
+    ("general", "Red bin", "red", False),
+]:
+    CATEGORIES[_category].update(route=_route, bin_color=_color, recyclable=_recyclable)
 
 class ClassifyRequest(BaseModel):
     image: str = Field(..., description="Base64 data URL from camera or file upload")
@@ -165,7 +173,7 @@ def classify_event(request: ClassifyRequest) -> dict:
         )
         db.commit()
     details = CATEGORIES[category]
-    return {"id": cursor.lastrowid, "category": category, "confidence": confidence, "review_required": review_required, **details}
+    return {"id": cursor.lastrowid, "created_at": now, "category": category, "confidence": confidence, "review_required": review_required, "suggestions": details["tip"], **details}
 
 @app.get("/api/events")
 def events(limit: int = 8) -> list[dict]:
@@ -183,3 +191,21 @@ def stats() -> dict:
     distribution = {key: 0 for key in CATEGORIES}
     distribution.update({row["category"]: row["count"] for row in rows})
     return {"total": total, "review_required": review, "distribution": distribution}
+
+def reset_database() -> None:
+    """Create the schema if needed and remove all saved classification history."""
+    initialise_database()
+    with closing(connect()) as db:
+        db.execute("DELETE FROM events")
+        db.execute("DELETE FROM sqlite_sequence WHERE name = 'events'")
+        db.commit()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SortWise database maintenance")
+    parser.add_argument("--reset-db", action="store_true", help="delete all saved classification events and start the log over")
+    args = parser.parse_args()
+    if args.reset_db:
+        reset_database()
+        print(f"Classification history cleared from {DB_PATH}")
+    else:
+        parser.print_help()
